@@ -16,6 +16,13 @@ type Tavolo = {
 
 type RichiesteTavoli = Record<string, Richiesta[]>
 
+type ModuloAperto = {
+  tavoloId: string
+  richiestaId: string | null
+}
+
+const prAttuale = 'Tommaso'
+
 const tavoli: Tavolo[] = [
   { id: 'console-1', numero: 1, zona: 'Console' },
   { id: 'console-2', numero: 2, zona: 'Console' },
@@ -106,7 +113,8 @@ function leggiRichieste(
         !Array.isArray(dati) &&
         Object.values(dati).every(
           (elenco: unknown) =>
-            Array.isArray(elenco) && elenco.every(richiestaValida),
+            Array.isArray(elenco) &&
+            elenco.every(richiestaValida),
         )
       ) {
         return dati as RichiesteTavoli
@@ -120,7 +128,8 @@ function leggiRichieste(
 }
 
 function TavoliSerata({ serataId }: { serataId: string }) {
-  const chiaveArchivio = `gestionale-tavoli:richieste:v1:${serataId}`
+  const chiaveArchivio =
+    `gestionale-tavoli:richieste:v1:${serataId}`
 
   const [richiesteSerata, setRichiesteSerata] =
     useState<RichiesteTavoli>(() =>
@@ -130,43 +139,12 @@ function TavoliSerata({ serataId }: { serataId: string }) {
   const [tavoloApertoId, setTavoloApertoId] =
     useState<string | null>(null)
 
-  const [moduloTavoloId, setModuloTavoloId] =
-    useState<string | null>(null)
+  const [moduloAperto, setModuloAperto] =
+    useState<ModuloAperto | null>(null)
 
   const [erroreSalvataggio, setErroreSalvataggio] = useState('')
 
-  function apriOChiudiTavolo(tavoloId: string) {
-    setTavoloApertoId((precedente) =>
-      precedente === tavoloId ? null : tavoloId,
-    )
-
-    setModuloTavoloId(null)
-    setErroreSalvataggio('')
-  }
-
-  function aggiungiRichiesta(
-    tavoloId: string,
-    dati: DatiRichiesta,
-  ) {
-    const esistenti = richiesteSerata[tavoloId] ?? []
-
-    if (esistenti.some((richiesta) => richiesta.accettata)) {
-      setErroreSalvataggio('Il tavolo è già prenotato.')
-      return
-    }
-
-    const nuova: Richiesta = {
-      ...dati,
-      id: crypto.randomUUID(),
-      pr: 'Tommaso',
-      accettata: false,
-    }
-
-    const aggiornate: RichiesteTavoli = {
-      ...richiesteSerata,
-      [tavoloId]: [...esistenti, nuova],
-    }
-
+  function salvaRichieste(aggiornate: RichiesteTavoli) {
     try {
       localStorage.setItem(
         chiaveArchivio,
@@ -174,15 +152,128 @@ function TavoliSerata({ serataId }: { serataId: string }) {
       )
     } catch {
       setErroreSalvataggio(
-        'Il browser non riesce a salvare la richiesta. ' +
-        'Controlla che sia consentito il salvataggio dei dati del sito.',
+        'Il browser non riesce a salvare i dati. ' +
+        'La modifica non è stata applicata.',
+      )
+      return false
+    }
+
+    setRichiesteSerata(aggiornate)
+    setErroreSalvataggio('')
+    return true
+  }
+
+  function chiudiModulo() {
+    setModuloAperto(null)
+    setErroreSalvataggio('')
+  }
+
+  function apriOChiudiTavolo(tavoloId: string) {
+    setTavoloApertoId((precedente) =>
+      precedente === tavoloId ? null : tavoloId,
+    )
+    chiudiModulo()
+  }
+
+  function apriModulo(
+    tavoloId: string,
+    richiestaId: string | null,
+  ) {
+    setModuloAperto({ tavoloId, richiestaId })
+    setErroreSalvataggio('')
+  }
+
+  function inviaRichiesta(
+    tavoloId: string,
+    richiestaId: string | null,
+    dati: DatiRichiesta,
+  ) {
+    const esistenti = richiesteSerata[tavoloId] ?? []
+    let aggiornateTavolo: Richiesta[]
+
+    if (richiestaId !== null) {
+      const originale = esistenti.find(
+        (richiesta) => richiesta.id === richiestaId,
+      )
+
+      if (
+        !originale ||
+        originale.pr !== prAttuale ||
+        originale.accettata
+      ) {
+        setErroreSalvataggio(
+          'Questa richiesta non può essere modificata.',
+        )
+        return
+      }
+
+      aggiornateTavolo = esistenti.map((richiesta) =>
+        richiesta.id === richiestaId
+          ? { ...richiesta, ...dati }
+          : richiesta,
+      )
+    } else {
+      if (esistenti.some((richiesta) => richiesta.accettata)) {
+        setErroreSalvataggio('Il tavolo è già prenotato.')
+        return
+      }
+
+      const nuova: Richiesta = {
+        ...dati,
+        id: crypto.randomUUID(),
+        pr: prAttuale,
+        accettata: false,
+      }
+
+      aggiornateTavolo = [...esistenti, nuova]
+    }
+
+    const salvato = salvaRichieste({
+      ...richiesteSerata,
+      [tavoloId]: aggiornateTavolo,
+    })
+
+    if (salvato) {
+      setModuloAperto(null)
+    }
+  }
+
+  function ritiraRichiesta(
+    tavoloId: string,
+    richiestaId: string,
+  ) {
+    const esistenti = richiesteSerata[tavoloId] ?? []
+    const richiesta = esistenti.find(
+      (elemento) => elemento.id === richiestaId,
+    )
+
+    if (
+      !richiesta ||
+      richiesta.pr !== prAttuale ||
+      richiesta.accettata
+    ) {
+      setErroreSalvataggio(
+        'Questa richiesta non può essere ritirata.',
       )
       return
     }
 
-    setRichiesteSerata(aggiornate)
-    setModuloTavoloId(null)
-    setErroreSalvataggio('')
+    const conferma = window.confirm(
+      `Vuoi ritirare la richiesta "${richiesta.gruppo}"?`,
+    )
+
+    if (!conferma) return
+
+    const salvato = salvaRichieste({
+      ...richiesteSerata,
+      [tavoloId]: esistenti.filter(
+        (elemento) => elemento.id !== richiestaId,
+      ),
+    })
+
+    if (salvato) {
+      setModuloAperto(null)
+    }
   }
 
   return (
@@ -194,7 +285,7 @@ function TavoliSerata({ serataId }: { serataId: string }) {
       </div>
 
       <p className="nota-demo">
-        Modalità demo · PR Tommaso.
+        Modalità demo · PR {prAttuale}.
         Le richieste sono salvate solo in questo browser.
       </p>
 
@@ -213,6 +304,7 @@ function TavoliSerata({ serataId }: { serataId: string }) {
                 )
 
                 const aperto = tavoloApertoId === tavolo.id
+
                 const pannelloId =
                   `dettagli-${serataId}-${tavolo.id}`
 
@@ -231,6 +323,18 @@ function TavoliSerata({ serataId }: { serataId: string }) {
                           : 'richieste'
                       }`
                     : 'Libero'
+
+                const richiestaInModifica =
+                  moduloAperto?.tavoloId === tavolo.id
+                    ? richieste.find(
+                        (richiesta) =>
+                          richiesta.id === moduloAperto.richiestaId,
+                      )
+                    : undefined
+
+                const mostraModulo =
+                  aperto &&
+                  moduloAperto?.tavoloId === tavolo.id
 
                 return (
                   <div className="elemento-tavolo" key={tavolo.id}>
@@ -299,36 +403,69 @@ function TavoliSerata({ serataId }: { serataId: string }) {
                                   ? 'Accettata'
                                   : 'In attesa'}
                               </p>
+
+                              {richiesta.pr === prAttuale &&
+                                !richiesta.accettata && (
+                                  <div className="azioni-richiesta">
+                                    <button
+                                      type="button"
+                                      className="pulsante-secondario"
+                                      onClick={() =>
+                                        apriModulo(
+                                          tavolo.id,
+                                          richiesta.id,
+                                        )
+                                      }
+                                    >
+                                      Modifica
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      className="pulsante-secondario"
+                                      onClick={() =>
+                                        ritiraRichiesta(
+                                          tavolo.id,
+                                          richiesta.id,
+                                        )
+                                      }
+                                    >
+                                      Ritira
+                                    </button>
+                                  </div>
+                                )}
                             </article>
                           ))}
                         </div>
                       )}
 
-                      {prenotato ? (
+                      {mostraModulo && moduloAperto ? (
+                        <NuovaRichiesta
+                          key={
+                            `${tavolo.id}-` +
+                            (moduloAperto.richiestaId ?? 'nuova')
+                          }
+                          datiIniziali={richiestaInModifica}
+                          onInvia={(dati) =>
+                            inviaRichiesta(
+                              tavolo.id,
+                              moduloAperto.richiestaId,
+                              dati,
+                            )
+                          }
+                          onAnnulla={chiudiModulo}
+                        />
+                      ) : prenotato ? (
                         <p>
                           Tavolo prenotato: non è possibile
                           inviare nuove richieste.
                         </p>
-                      ) : aperto && moduloTavoloId === tavolo.id ? (
-                        <NuovaRichiesta
-                          key={`${serataId}-${tavolo.id}`}
-                          onInvia={(dati) =>
-                            aggiungiRichiesta(tavolo.id, dati)
-                          }
-                          onAnnulla={() => {
-                            setModuloTavoloId(null)
-                            setErroreSalvataggio('')
-                          }}
-                        />
                       ) : (
                         <div className="azioni-richiesta">
                           <button
                             type="button"
                             className="pulsante-principale"
-                            onClick={() => {
-                              setModuloTavoloId(tavolo.id)
-                              setErroreSalvataggio('')
-                            }}
+                            onClick={() => apriModulo(tavolo.id, null)}
                           >
                             + Nuova richiesta
                           </button>

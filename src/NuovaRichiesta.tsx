@@ -10,6 +10,7 @@ export type DatiRichiesta = {
 }
 
 type Props = {
+  datiIniziali?: DatiRichiesta
   onInvia: (dati: DatiRichiesta) => void
   onAnnulla: () => void
 }
@@ -21,13 +22,34 @@ function euro(valore: number) {
   }).format(valore)
 }
 
-function NuovaRichiesta({ onInvia, onAnnulla }: Props) {
-  const [gruppo, setGruppo] = useState('')
-  const [responsabile, setResponsabile] = useState('')
-  const [pass, setPass] = useState('')
-  const [importo, setImporto] = useState('')
+function NuovaRichiesta({
+  datiIniziali,
+  onInvia,
+  onAnnulla,
+}: Props) {
+  const modifica = datiIniziali !== undefined
+
+  const [gruppo, setGruppo] = useState(
+    datiIniziali?.gruppo ?? '',
+  )
+
+  const [responsabile, setResponsabile] = useState(
+    datiIniziali?.responsabile ?? '',
+  )
+
+  const [pass, setPass] = useState(
+    datiIniziali ? String(datiIniziali.persone) : '',
+  )
+
+  const [importo, setImporto] = useState(
+    datiIniziali ? String(datiIniziali.totale) : '',
+  )
+
   const [baseCalcolo, setBaseCalcolo] =
-    useState<'persona' | 'totale'>('persona')
+    useState<'persona' | 'totale'>(
+      datiIniziali ? 'totale' : 'persona',
+    )
+
   const [errore, setErrore] = useState('')
 
   const persone = Number(pass)
@@ -89,7 +111,9 @@ function NuovaRichiesta({ onInvia, onAnnulla }: Props) {
 
   return (
     <form className="modulo-richiesta" onSubmit={invia}>
-      <h3>Nuova richiesta</h3>
+      <h3>
+        {modifica ? 'Modifica richiesta' : 'Nuova richiesta'}
+      </h3>
 
       <p className="nota-modulo">
         PR: Tommaso · Account dimostrativo
@@ -113,7 +137,9 @@ function NuovaRichiesta({ onInvia, onAnnulla }: Props) {
           <input
             type="text"
             value={responsabile}
-            onChange={(evento) => setResponsabile(evento.target.value)}
+            onChange={(evento) =>
+              setResponsabile(evento.target.value)
+            }
             placeholder="Es. Albi"
             maxLength={100}
             required
@@ -196,11 +222,15 @@ function NuovaRichiesta({ onInvia, onAnnulla }: Props) {
         </div>
       )}
 
-      {errore && <p className="errore-richiesta" role="alert">{errore}</p>}
+      {errore && (
+        <p className="errore-richiesta" role="alert">
+          {errore}
+        </p>
+      )}
 
       <div className="azioni-richiesta">
         <button type="submit" className="pulsante-principale">
-          Invia richiesta
+          {modifica ? 'Salva modifiche' : 'Invia richiesta'}
         </button>
 
         <button
