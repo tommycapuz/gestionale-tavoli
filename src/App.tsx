@@ -53,7 +53,7 @@ function App() {
           GESTIONALE TAVOLI
         </a>
 
-        <span className="badge-demo">Modalità demo · PR</span>
+        <span className="badge-demo">Modalità demo</span>
       </header>
 
       <main className="contenuto">
