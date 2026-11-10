@@ -1,0 +1,86 @@
+.riepilogo-serata {
+  margin-top: 40px;
+}
+
+.intestazione-riepilogo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.intestazione-riepilogo h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.intestazione-riepilogo p {
+  margin: 8px 0 0;
+  font-size: 13px;
+}
+
+.scorrimento-riepilogo {
+  overflow-x: auto;
+  border: 1px solid #ffffff18;
+  border-radius: 10px;
+}
+
+.scorrimento-riepilogo:focus-visible {
+  outline: 2px solid #c4b5fd;
+  outline-offset: 3px;
+}
+
+.tabella-riepilogo {
+  width: 100%;
+  min-width: 850px;
+  border-collapse: collapse;
+  font-size: 13px;
+  text-align: left;
+}
+
+.didascalia-riepilogo {
+  padding: 12px;
+  color: #b7afc7;
+  text-align: left;
+}
+
+.tabella-riepilogo th,
+.tabella-riepilogo td {
+  padding: 12px;
+  border-bottom: 1px solid #ffffff12;
+}
+
+.tabella-riepilogo th {
+  background: #282036;
+  color: #d7c8ff;
+  white-space: nowrap;
+}
+
+.tabella-riepilogo tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.tabella-riepilogo td:nth-child(5),
+.tabella-riepilogo td:nth-child(6) {
+  white-space: nowrap;
+}
+
+.totali-riepilogo {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 28px;
+  margin-top: 20px;
+  font-size: 14px;
+  color: #b7afc7;
+}
+
+.totali-riepilogo strong {
+  color: #f4f4f8;
+}
+
+.riepilogo-serata button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

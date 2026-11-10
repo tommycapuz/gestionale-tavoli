@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import NuovaRichiesta from './NuovaRichiesta'
 import type { DatiRichiesta } from './NuovaRichiesta'
+import RiepilogoSerata from './RiepilogoSerata'
 
 type Richiesta = DatiRichiesta & {
   id: string
@@ -640,6 +641,14 @@ function TavoliSerata({ serataId }: { serataId: string }) {
           </div>
         </section>
       ))}
+      
+      {ruolo === 'capo' && (
+        <RiepilogoSerata
+          serataId={serataId}
+          tavoli={tavoli}
+          richieste={richiesteSerata}
+        />
+      )}
     </section>
   )
 }
