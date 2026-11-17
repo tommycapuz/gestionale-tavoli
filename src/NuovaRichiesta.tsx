@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import './NuovaRichiesta.css'
+import './InterfacciaAccount.css'
 
 export type DatiRichiesta = {
   gruppo: string
@@ -11,235 +11,83 @@ export type DatiRichiesta = {
 
 type Props = {
   datiIniziali?: DatiRichiesta
+  nomePr?: string
   onInvia: (dati: DatiRichiesta) => void
   onAnnulla: () => void
 }
 
-function euro(valore: number) {
-  return new Intl.NumberFormat('it-IT', {
-    style: 'currency',
-    currency: 'EUR',
-  }).format(valore)
-}
-
-function NuovaRichiesta({
-  datiIniziali,
-  onInvia,
-  onAnnulla,
-}: Props) {
-  const modifica = datiIniziali !== undefined
-
-  const [gruppo, setGruppo] = useState(
-    datiIniziali?.gruppo ?? '',
-  )
-
-  const [responsabile, setResponsabile] = useState(
-    datiIniziali?.responsabile ?? '',
-  )
-
-  const [pass, setPass] = useState(
-    datiIniziali ? String(datiIniziali.persone) : '',
-  )
-
-  const [importo, setImporto] = useState(
-    datiIniziali ? String(datiIniziali.totale) : '',
-  )
-
-  const [baseCalcolo, setBaseCalcolo] =
-    useState<'persona' | 'totale'>(
-      datiIniziali ? 'totale' : 'persona',
-    )
-
+function NuovaRichiesta({ datiIniziali, nomePr, onInvia, onAnnulla }: Props) {
+  const [gruppo, setGruppo] = useState(datiIniziali?.gruppo ?? '')
+  const [responsabile, setResponsabile] = useState(datiIniziali?.responsabile ?? '')
+  const [persone, setPersone] = useState(datiIniziali ? String(datiIniziali.persone) : '')
+  const [base, setBase] = useState<'persona' | 'totale'>(datiIniziali ? 'totale' : 'persona')
+  const [importo, setImporto] = useState(datiIniziali ? String(datiIniziali.totale) : '')
   const [errore, setErrore] = useState('')
+  const pass = Number(persone)
+  const centesimi = Math.round(Number(importo) * 100)
+  const totaleCentesimi = base === 'totale' ? centesimi : centesimi * pass
+  const passValidi = Number.isSafeInteger(pass) && pass > 0
+  const totaleValido = Number.isSafeInteger(totaleCentesimi) && totaleCentesimi > 0
+  const quota = passValidi && totaleValido ? (totaleCentesimi / 100 / pass).toFixed(2) : ''
+  const totale = passValidi && totaleValido ? (totaleCentesimi / 100).toFixed(2) : ''
 
-  const persone = Number(pass)
-  const valore = Number(importo)
-
-  const valoriValidi =
-    Number.isInteger(persone) &&
-    persone > 0 &&
-    Number.isFinite(valore) &&
-    valore > 0
-
-  const centesimi = Math.round(valore * 100)
-
-  const totaleCentesimi = valoriValidi
-    ? baseCalcolo === 'persona'
-      ? centesimi * persone
-      : centesimi
-    : 0
-
-  const totale = totaleCentesimi / 100
-
-  const quota = valoriValidi
-    ? totale / persone
-    : 0
-
-  function cambiaImporto(
-    nuovaBase: 'persona' | 'totale',
-    nuovoImporto: string,
-  ) {
-    setBaseCalcolo(nuovaBase)
-    setImporto(nuovoImporto)
+  function cambiaImporto(valore: string, nuovaBase: 'persona' | 'totale') {
+    setBase(nuovaBase)
+    setImporto(valore)
   }
 
   function invia(evento: FormEvent<HTMLFormElement>) {
     evento.preventDefault()
     setErrore('')
-
     if (!gruppo.trim() || !responsabile.trim()) {
-      setErrore('Inserisci il nome del gruppo e del responsabile.')
+      setErrore('Inserisci il nome del gruppo e il responsabile.')
       return
     }
-
-    if (
-      !valoriValidi ||
-      !Number.isSafeInteger(totaleCentesimi) ||
-      totaleCentesimi <= 0
-    ) {
-      setErrore('Inserisci pass e importi validi, maggiori di zero.')
+    if (!passValidi || !totaleValido || !importo.trim() || !Number.isFinite(Number(importo))) {
+      setErrore('Inserisci un numero intero positivo di pass e una spesa valida maggiore di zero.')
       return
     }
-
-    onInvia({
-      gruppo: gruppo.trim(),
-      responsabile: responsabile.trim(),
-      persone,
-      totale,
-    })
+    onInvia({ gruppo: gruppo.trim(), responsabile: responsabile.trim(),
+      persone: pass, totale: totaleCentesimi / 100 })
   }
 
   return (
-    <form className="modulo-richiesta" onSubmit={invia}>
-      <h3>
-        {modifica ? 'Modifica richiesta' : 'Nuova richiesta'}
-      </h3>
-
-      <p className="nota-modulo">
-        PR: Tommaso · Account dimostrativo
-      </p>
-
-      <div className="campi-richiesta">
-        <label>
-          Nome del gruppo / tavolo
-          <input
-            type="text"
-            value={gruppo}
-            onChange={(evento) => setGruppo(evento.target.value)}
-            placeholder="Es. Compleanno Marco"
-            maxLength={100}
-            required
-          />
+    <form className="modulo-account" onSubmit={invia}>
+      <h3>{datiIniziali ? 'Modifica richiesta' : 'Nuova richiesta'}</h3>
+      {nomePr && <p className="nota-demo">PR: {nomePr}</p>}
+      <div className="modulo-account-campi">
+        <label>Nome del gruppo
+          <input value={gruppo} onChange={(e) => setGruppo(e.target.value)}
+            maxLength={100} required />
         </label>
-
-        <label>
-          Staff / responsabile
-          <input
-            type="text"
-            value={responsabile}
-            onChange={(evento) =>
-              setResponsabile(evento.target.value)
-            }
-            placeholder="Es. Albi"
-            maxLength={100}
-            required
-          />
+        <label>Responsabile
+          <input value={responsabile} onChange={(e) => setResponsabile(e.target.value)}
+            maxLength={100} required />
         </label>
-
-        <label>
-          Numero di pass
-          <input
-            type="number"
-            inputMode="numeric"
-            min="1"
-            step="1"
-            value={pass}
-            onChange={(evento) => setPass(evento.target.value)}
-            placeholder="Es. 5"
-            required
-          />
+        <label>Numero di pass
+          <input type="number" min="1" step="1" value={persone}
+            onChange={(e) => setPersone(e.target.value)} required />
         </label>
-
-        <label>
-          Spesa a persona (€)
-          <input
-            type="number"
-            inputMode="decimal"
-            min="0.01"
-            step="0.01"
-            value={
-              baseCalcolo === 'persona'
-                ? importo
-                : valoriValidi
-                  ? quota.toFixed(2)
-                  : ''
-            }
-            onChange={(evento) =>
-              cambiaImporto('persona', evento.target.value)
-            }
-            placeholder="Es. 35"
-            required
-          />
+        <label>Spesa a persona (€)
+          <input type="number" min="0" step="0.01"
+            value={base === 'persona' ? importo : quota}
+            onChange={(e) => cambiaImporto(e.target.value, 'persona')} />
         </label>
-
-        <label>
-          Spesa totale (€)
-          <input
-            type="number"
-            inputMode="decimal"
-            min="0.01"
-            step="0.01"
-            value={
-              baseCalcolo === 'totale'
-                ? importo
-                : valoriValidi
-                  ? totale.toFixed(2)
-                  : ''
-            }
-            onChange={(evento) =>
-              cambiaImporto('totale', evento.target.value)
-            }
-            placeholder="Es. 175"
-            required
-          />
+        <label>Spesa totale (€)
+          <input type="number" min="0" step="0.01"
+            value={base === 'totale' ? importo : totale}
+            onChange={(e) => cambiaImporto(e.target.value, 'totale')} />
         </label>
       </div>
-
-      <p className="nota-modulo">
-        Modifica uno dei due importi: l’altro viene calcolato
-        automaticamente. Cambiando i pass, rimane fisso l’ultimo
-        importo inserito manualmente.
-      </p>
-
-      {valoriValidi && (
-        <div className="riepilogo-proposta" aria-live="polite">
-          <strong>{persone} pass</strong>
-          <span>Quota media: {euro(quota)}</span>
-          <strong>Totale: {euro(totale)}</strong>
-          <small>
-            La quota media è arrotondata al centesimo.
-          </small>
-        </div>
-      )}
-
-      {errore && (
-        <p className="errore-richiesta" role="alert">
-          {errore}
-        </p>
-      )}
-
+      <p className="nota-demo">Puoi inserire la quota individuale oppure il totale.
+        Se cambi i pass, viene mantenuto l’ultimo importo che hai inserito manualmente.
+        La quota calcolata è mostrata con due decimali.</p>
+      {errore && <p className="errore-richiesta" role="alert">{errore}</p>}
       <div className="azioni-richiesta">
         <button type="submit" className="pulsante-principale">
-          {modifica ? 'Salva modifiche' : 'Invia richiesta'}
+          {datiIniziali ? 'Salva modifiche' : 'Invia richiesta'}
         </button>
-
-        <button
-          type="button"
-          className="pulsante-secondario"
-          onClick={onAnnulla}
-        >
-          Annulla
-        </button>
+        <button type="button" className="pulsante-secondario" onClick={onAnnulla}>Annulla</button>
       </div>
     </form>
   )

@@ -5,6 +5,9 @@ import './GestioneSerate.css'
 import TavoliSerata from './TavoliSerata'
 import ArchivioSerata from './ArchivioSerata'
 import type { DatiArchivio } from './ArchivioSerata'
+import type { Profilo } from './profilo'
+import { etaAllaData } from './profilo'
+import './InterfacciaAccount.css'
 
 type TipoSerata = 'Venerdì' | 'Sabato' | 'Speciale'
 type Vista = 'serate' | 'admin' | 'archivio'
@@ -177,7 +180,27 @@ function formattaMese(mese: string) {
   }).format(new Date(`${mese}-01T12:00:00`))
 }
 
-function App() {
+type Props = {
+  profilo: Profilo
+  onEsci: () => Promise<void>
+  uscita: boolean
+  erroreUscita: string
+}
+
+function App({ profilo, onEsci, uscita, erroreUscita }: Props) {
+  const amministratore = profilo.ruolo === 'admin'
+  const gestore = amministratore || profilo.ruolo === 'capo'
+
+  function puoVedereSerata(serata: Serata) {
+    if (gestore) return true
+    if (serata.archivio) return false
+    if (etaAllaData(profilo.data_nascita, serata.data) < serata.etaMinima) {
+      return false
+    }
+    return serata.tipo === 'Speciale' ||
+      (serata.tipo === 'Venerdì' && profilo.venerdi) ||
+      (serata.tipo === 'Sabato' && profilo.sabato)
+  }
   const [serate, setSerate] = useState<Serata[]>(caricaSerate)
   const [serataId, setSerataId] = useState<string | null>(null)
   const [vista, setVista] = useState<Vista>('serate')
@@ -194,12 +217,13 @@ function App() {
   const [messaggio, setMessaggio] = useState('')
 
   const serataSelezionata = serate.find(
-    (serata) => serata.id === serataId,
+    (serata) => serata.id === serataId && puoVedereSerata(serata),
   )
 
   const serateDelMese = serate
     .filter(
       (serata) =>
+        puoVedereSerata(serata) &&
         serata.data.startsWith(meseVisibile) &&
         (vista === 'archivio'
           ? serata.archivio !== undefined
@@ -227,6 +251,8 @@ function App() {
   }
 
   function cambiaVista(nuovaVista: Vista) {
+    if (nuovaVista === 'admin' && !amministratore) return
+    if (nuovaVista === 'archivio' && !gestore) return
     setVista(nuovaVista)
     setSerataId(null)
     setErrore('')
@@ -245,7 +271,7 @@ function App() {
     setErrore('')
     setMessaggio('')
 
-    if (vista !== 'admin') return
+    if (vista !== 'admin' || !amministratore) return
 
     if (!nome.trim() || !dataValida(data)) {
       setErrore('Inserisci un nome e una data valida.')
@@ -301,7 +327,7 @@ function App() {
   ) {
     const serata = serate.find((elemento) => elemento.id === id)
 
-    if (!serata || serata.archivio) return
+    if (!gestore || !serata || serata.archivio) return
 
     const conferma = window.confirm(
       `Chiudere la serata "${serata.nome}" del ${formattaData(serata.data)}? ` +
@@ -332,11 +358,18 @@ function App() {
     <div className="app">
       <header className="barra-superiore">
         <a className="marchio" href="/">GESTIONALE TAVOLI</a>
-        <span className="badge-demo">Modalità demo</span>
+        <div className="account-barra">
+          <span>{profilo.nome} · {profilo.ruolo === 'admin'
+            ? 'Amministratore' : profilo.ruolo === 'capo' ? 'Capo' : 'PR'}</span>
+          <button type="button" className="pulsante-secondario"
+            disabled={uscita} onClick={() => void onEsci()}>
+            {uscita ? 'Uscita…' : 'Esci'}
+          </button>
+        </div>
       </header>
 
       <main className="contenuto">
-        <nav className="navigazione-demo" aria-label="Viste dimostrative">
+        <nav className="navigazione-demo" aria-label="Navigazione gestionale">
           <button
             type="button"
             className={
@@ -350,6 +383,7 @@ function App() {
             Serate
           </button>
 
+          {amministratore && (
           <button
             type="button"
             className={
@@ -362,7 +396,9 @@ function App() {
           >
             Amministrazione
           </button>
+          )}
 
+          {gestore && (
           <button
             type="button"
             className={
@@ -375,7 +411,17 @@ function App() {
           >
             Archivio
           </button>
+          )}
         </nav>
+
+        {erroreUscita && (
+          <p className="errore-richiesta" role="alert">{erroreUscita}</p>
+        )}
+
+        <p className="nota-demo">
+          Account collegato. Serate e richieste sono ancora salvate
+          in questo browser e non sono condivise tra dispositivi.
+        </p>
 
         {errore && (
           <p className="errore-richiesta" role="alert">{errore}</p>
@@ -420,8 +466,9 @@ function App() {
               />
             ) : (
               <TavoliSerata
-                key={serataSelezionata.id}
+                key={`${profilo.id}-${serataSelezionata.id}`}
                 serataId={serataSelezionata.id}
+                profilo={profilo}
                 onChiudi={(richieste, tavoli) =>
                   archiviaSerata(
                     serataSelezionata.id,
@@ -593,9 +640,9 @@ function App() {
             )}
 
             <p className="nota-demo">
-              Dati salvati in questo browser.
-              Le viste sono dimostrative; gli accessi personali
-              saranno aggiunti successivamente.
+              {gestore
+                ? 'Stai consultando tutte le serate del mese selezionato.'
+                : 'Vedi le serate compatibili con la tua età alla data dell’evento e con le preferenze scelte.'}
             </p>
           </>
         )}

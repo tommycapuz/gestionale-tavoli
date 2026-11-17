@@ -2,10 +2,12 @@ import { useState } from 'react'
 import NuovaRichiesta from './NuovaRichiesta'
 import type { DatiRichiesta } from './NuovaRichiesta'
 import RiepilogoSerata from './RiepilogoSerata'
+import type { Profilo } from './profilo'
 
 type Richiesta = DatiRichiesta & {
   id: string
   pr: string
+  prId?: string
   accettata: boolean
 }
 
@@ -22,17 +24,14 @@ type ModuloAperto = {
   richiestaId: string | null
 }
 
-type Ruolo = 'pr' | 'capo'
-
 type Props = {
   serataId: string
+  profilo: Profilo
   onChiudi?: (
     richieste: RichiesteTavoli,
     configurazioneTavoli: Tavolo[],
   ) => void
 }
-
-const prAttuale = 'Tommaso'
 
 const tavoli: Tavolo[] = [
   { id: 'console-1', numero: 1, zona: 'Console' },
@@ -97,6 +96,7 @@ function richiestaValida(valore: unknown): valore is Richiesta {
     typeof richiesta.id === 'string' &&
     typeof richiesta.gruppo === 'string' &&
     typeof richiesta.pr === 'string' &&
+    (richiesta.prId === undefined || typeof richiesta.prId === 'string') &&
     typeof richiesta.responsabile === 'string' &&
     typeof richiesta.accettata === 'boolean' &&
     typeof richiesta.persone === 'number' &&
@@ -138,7 +138,13 @@ function leggiRichieste(
   return richiesteDemo[serataId] ?? {}
 }
 
-function TavoliSerata({ serataId, onChiudi }: Props) {
+function TavoliSerata({ serataId, profilo, onChiudi }: Props) {
+  const ruolo = profilo.ruolo
+  const gestore = ruolo === 'capo' || ruolo === 'admin'
+
+  function propria(richiesta: Richiesta) {
+    return richiesta.prId === profilo.id
+  }
   const chiaveArchivio =
     `gestionale-tavoli:richieste:v1:${serataId}`
 
@@ -146,8 +152,6 @@ function TavoliSerata({ serataId, onChiudi }: Props) {
     useState<RichiesteTavoli>(() =>
       leggiRichieste(chiaveArchivio, serataId),
     )
-
-  const [ruolo, setRuolo] = useState<Ruolo>('pr')
 
   const [tavoloApertoId, setTavoloApertoId] =
     useState<string | null>(null)
@@ -179,11 +183,6 @@ function TavoliSerata({ serataId, onChiudi }: Props) {
   function chiudiModulo() {
     setModuloAperto(null)
     setErroreSalvataggio('')
-  }
-
-  function cambiaRuolo(nuovoRuolo: Ruolo) {
-    setRuolo(nuovoRuolo)
-    chiudiModulo()
   }
 
   function apriOChiudiTavolo(tavoloId: string) {
@@ -220,7 +219,7 @@ function TavoliSerata({ serataId, onChiudi }: Props) {
 
       if (
         !originale ||
-        originale.pr !== prAttuale ||
+        !propria(originale) ||
         originale.accettata
       ) {
         setErroreSalvataggio(
@@ -245,7 +244,8 @@ function TavoliSerata({ serataId, onChiudi }: Props) {
         {
           ...dati,
           id: crypto.randomUUID(),
-          pr: prAttuale,
+          pr: profilo.nome,
+          prId: profilo.id,
           accettata: false,
         },
       ]
@@ -275,7 +275,7 @@ function TavoliSerata({ serataId, onChiudi }: Props) {
 
     if (
       !richiesta ||
-      richiesta.pr !== prAttuale ||
+      !propria(richiesta) ||
       richiesta.accettata
     ) {
       setErroreSalvataggio(
@@ -308,7 +308,7 @@ function TavoliSerata({ serataId, onChiudi }: Props) {
     tavoloId: string,
     richiestaId: string,
   ) {
-    if (ruolo !== 'capo') return
+    if (!gestore) return
 
     const esistenti = richiesteSerata[tavoloId] ?? []
 
@@ -343,7 +343,7 @@ function TavoliSerata({ serataId, onChiudi }: Props) {
   }
 
   function revocaAssegnazione(tavoloId: string) {
-    if (ruolo !== 'capo') return
+    if (!gestore) return
 
     const esistenti = richiesteSerata[tavoloId] ?? []
 
@@ -373,43 +373,20 @@ function TavoliSerata({ serataId, onChiudi }: Props) {
 
   return (
     <section className="gestione-tavoli">
-      <div
-        className="azioni-richiesta"
-        aria-label="Ruolo dimostrativo"
-      >
-        <button
-          type="button"
-          className={
-            ruolo === 'pr'
-              ? 'pulsante-principale'
-              : 'pulsante-secondario'
-          }
-          aria-pressed={ruolo === 'pr'}
-          onClick={() => cambiaRuolo('pr')}
-        >
-          Vista PR
-        </button>
-
-        <button
-          type="button"
-          className={
-            ruolo === 'capo'
-              ? 'pulsante-principale'
-              : 'pulsante-secondario'
-          }
-          aria-pressed={ruolo === 'capo'}
-          onClick={() => cambiaRuolo('capo')}
-        >
-          Vista Capo
-        </button>
-      </div>
-
       <p className="nota-demo">
-        {ruolo === 'pr'
-          ? `Modalità demo · PR ${prAttuale}.`
-          : 'Modalità demo · Capo.'}{' '}
-        Le richieste sono salvate solo in questo browser.
+        {gestore ? 'Gestione tavoli' : `PR: ${profilo.nome}`}.{' '}
+        Richieste salvate in questo browser.
       </p>
+
+      {Object.values(richiesteSerata).some((elenco) =>
+        elenco.some((richiesta) => !richiesta.prId),
+      ) && (
+        <p className="nota-demo">
+          Le richieste precedenti al collegamento degli account sono
+          conservate. Non avendo un ID autore, non possono essere
+          modificate o ritirate dai PR. Il capo può gestirne l’assegnazione.
+        </p>
+      )}
 
       <div className="legenda">
         <span className="stato-libero">● Libero</span>
@@ -419,7 +396,7 @@ function TavoliSerata({ serataId, onChiudi }: Props) {
         <span className="stato-prenotato">● Prenotato</span>
       </div>
 
-      {ruolo === 'capo' && onChiudi && (
+      {gestore && onChiudi && (
         <div className="azioni-richiesta">
           <button
             type="button"
@@ -566,7 +543,7 @@ function TavoliSerata({ serataId, onChiudi }: Props) {
                               </p>
 
                               {ruolo === 'pr' &&
-                                richiesta.pr === prAttuale &&
+                                propria(richiesta) &&
                                 !richiesta.accettata && (
                                   <div className="azioni-richiesta">
                                     <button
@@ -597,7 +574,7 @@ function TavoliSerata({ serataId, onChiudi }: Props) {
                                   </div>
                                 )}
 
-                              {ruolo === 'capo' && (
+                              {gestore && (
                                 <div className="azioni-richiesta">
                                   {richiesta.accettata ? (
                                     <button
@@ -645,6 +622,7 @@ function TavoliSerata({ serataId, onChiudi }: Props) {
                               )
                             }
                             datiIniziali={richiestaInModifica}
+                            nomePr={profilo.nome}
                             onInvia={(dati) =>
                               inviaRichiesta(
                                 tavolo.id,
@@ -690,7 +668,7 @@ function TavoliSerata({ serataId, onChiudi }: Props) {
         </section>
       ))}
 
-      {ruolo === 'capo' && (
+      {gestore && (
         <RiepilogoSerata
           serataId={serataId}
           tavoli={tavoli}
