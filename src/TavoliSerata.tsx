@@ -24,6 +24,14 @@ type ModuloAperto = {
 
 type Ruolo = 'pr' | 'capo'
 
+type Props = {
+  serataId: string
+  onChiudi?: (
+    richieste: RichiesteTavoli,
+    configurazioneTavoli: Tavolo[],
+  ) => void
+}
+
 const prAttuale = 'Tommaso'
 
 const tavoli: Tavolo[] = [
@@ -130,7 +138,7 @@ function leggiRichieste(
   return richiesteDemo[serataId] ?? {}
 }
 
-function TavoliSerata({ serataId }: { serataId: string }) {
+function TavoliSerata({ serataId, onChiudi }: Props) {
   const chiaveArchivio =
     `gestionale-tavoli:richieste:v1:${serataId}`
 
@@ -323,7 +331,6 @@ function TavoliSerata({ serataId }: { serataId: string }) {
       return
     }
 
-    // Soltanto la proposta scelta risulta accettata.
     const aggiornateTavolo = esistenti.map((richiesta) => ({
       ...richiesta,
       accettata: richiesta.id === richiestaId,
@@ -366,7 +373,10 @@ function TavoliSerata({ serataId }: { serataId: string }) {
 
   return (
     <section className="gestione-tavoli">
-      <div className="azioni-richiesta" aria-label="Ruolo dimostrativo">
+      <div
+        className="azioni-richiesta"
+        aria-label="Ruolo dimostrativo"
+      >
         <button
           type="button"
           className={
@@ -403,9 +413,23 @@ function TavoliSerata({ serataId }: { serataId: string }) {
 
       <div className="legenda">
         <span className="stato-libero">● Libero</span>
-        <span className="stato-richieste">● Richieste in attesa</span>
+        <span className="stato-richieste">
+          ● Richieste in attesa
+        </span>
         <span className="stato-prenotato">● Prenotato</span>
       </div>
+
+      {ruolo === 'capo' && onChiudi && (
+        <div className="azioni-richiesta">
+          <button
+            type="button"
+            className="pulsante-secondario"
+            onClick={() => onChiudi(richiesteSerata, tavoli)}
+          >
+            Chiudi serata e archivia
+          </button>
+        </div>
+      )}
 
       {zone.map((zona) => (
         <section className="zona-tavoli" key={zona}>
@@ -415,13 +439,15 @@ function TavoliSerata({ serataId }: { serataId: string }) {
             {tavoli
               .filter((tavolo) => tavolo.zona === zona)
               .map((tavolo) => {
-                const richieste = richiesteSerata[tavolo.id] ?? []
+                const richieste =
+                  richiesteSerata[tavolo.id] ?? []
 
                 const prenotato = richieste.some(
                   (richiesta) => richiesta.accettata,
                 )
 
-                const aperto = tavoloApertoId === tavolo.id
+                const aperto =
+                  tavoloApertoId === tavolo.id
 
                 const pannelloId =
                   `dettagli-${serataId}-${tavolo.id}`
@@ -446,7 +472,8 @@ function TavoliSerata({ serataId }: { serataId: string }) {
                   moduloAperto?.tavoloId === tavolo.id
                     ? richieste.find(
                         (richiesta) =>
-                          richiesta.id === moduloAperto.richiestaId,
+                          richiesta.id ===
+                          moduloAperto.richiestaId,
                       )
                     : undefined
 
@@ -456,18 +483,25 @@ function TavoliSerata({ serataId }: { serataId: string }) {
                   moduloAperto?.tavoloId === tavolo.id
 
                 return (
-                  <div className="elemento-tavolo" key={tavolo.id}>
+                  <div
+                    className="elemento-tavolo"
+                    key={tavolo.id}
+                  >
                     <button
                       type="button"
                       className={`scheda-tavolo stato-${stato}`}
-                      onClick={() => apriOChiudiTavolo(tavolo.id)}
+                      onClick={() =>
+                        apriOChiudiTavolo(tavolo.id)
+                      }
                       aria-expanded={aperto}
                       aria-controls={pannelloId}
                     >
                       <span>Tavolo</span>
                       <strong>{tavolo.numero}</strong>
+
                       <span>
-                        {descrizione} · {aperto ? 'Chiudi ↑' : 'Apri ↓'}
+                        {descrizione} ·{' '}
+                        {aperto ? 'Chiudi ↑' : 'Apri ↓'}
                       </span>
                     </button>
 
@@ -476,7 +510,8 @@ function TavoliSerata({ serataId }: { serataId: string }) {
                       className="pannello dettagli-inline"
                       hidden={!aperto}
                       aria-label={
-                        `Richieste ${zona}, tavolo ${tavolo.numero}`
+                        `Richieste ${zona}, ` +
+                        `tavolo ${tavolo.numero}`
                       }
                     >
                       <h3 className="titolo-richieste">
@@ -484,7 +519,9 @@ function TavoliSerata({ serataId }: { serataId: string }) {
                       </h3>
 
                       {richieste.length === 0 ? (
-                        <p>Nessuna richiesta per questo tavolo.</p>
+                        <p>
+                          Nessuna richiesta per questo tavolo.
+                        </p>
                       ) : (
                         <div className="elenco-richieste">
                           {richieste.map((richiesta) => (
@@ -495,20 +532,23 @@ function TavoliSerata({ serataId }: { serataId: string }) {
                               <h3>{richiesta.gruppo}</h3>
 
                               <p>
-                                PR: {richiesta.pr} · Responsabile:{' '}
+                                PR: {richiesta.pr} ·
+                                Responsabile:{' '}
                                 {richiesta.responsabile}
                               </p>
 
                               <p>
                                 {richiesta.persone} pass ·{' '}
                                 {euro(
-                                  richiesta.totale / richiesta.persone,
+                                  richiesta.totale /
+                                    richiesta.persone,
                                 )}{' '}
                                 a persona
                               </p>
 
                               <strong>
-                                Totale: {euro(richiesta.totale)}
+                                Totale:{' '}
+                                {euro(richiesta.totale)}
                               </strong>
 
                               <p
@@ -564,7 +604,9 @@ function TavoliSerata({ serataId }: { serataId: string }) {
                                       type="button"
                                       className="pulsante-secondario"
                                       onClick={() =>
-                                        revocaAssegnazione(tavolo.id)
+                                        revocaAssegnazione(
+                                          tavolo.id,
+                                        )
                                       }
                                     >
                                       Revoca assegnazione
@@ -597,7 +639,10 @@ function TavoliSerata({ serataId }: { serataId: string }) {
                           <NuovaRichiesta
                             key={
                               `${tavolo.id}-` +
-                              (moduloAperto.richiestaId ?? 'nuova')
+                              (
+                                moduloAperto.richiestaId ??
+                                'nuova'
+                              )
                             }
                             datiIniziali={richiestaInModifica}
                             onInvia={(dati) =>
@@ -630,7 +675,10 @@ function TavoliSerata({ serataId }: { serataId: string }) {
                       )}
 
                       {aperto && erroreSalvataggio && (
-                        <p className="errore-richiesta" role="alert">
+                        <p
+                          className="errore-richiesta"
+                          role="alert"
+                        >
                           {erroreSalvataggio}
                         </p>
                       )}
@@ -641,7 +689,7 @@ function TavoliSerata({ serataId }: { serataId: string }) {
           </div>
         </section>
       ))}
-      
+
       {ruolo === 'capo' && (
         <RiepilogoSerata
           serataId={serataId}

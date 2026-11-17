@@ -3,9 +3,11 @@ import type { FormEvent } from 'react'
 import './App.css'
 import './GestioneSerate.css'
 import TavoliSerata from './TavoliSerata'
-
+import ArchivioSerata from './ArchivioSerata'
+import type { DatiArchivio } from './ArchivioSerata'
 
 type TipoSerata = 'Venerdì' | 'Sabato' | 'Speciale'
+type Vista = 'serate' | 'admin' | 'archivio'
 
 type Serata = {
   id: string
@@ -13,6 +15,7 @@ type Serata = {
   data: string
   etaMinima: number
   tipo: TipoSerata
+  archivio?: DatiArchivio
 }
 
 const chiaveSerate = 'gestionale-tavoli:serate:v1'
@@ -63,6 +66,60 @@ function dataValida(data: string) {
   )
 }
 
+function archivioValido(valore: unknown): boolean {
+  if (typeof valore !== 'object' || valore === null) return false
+
+  const archivio = valore as Record<string, unknown>
+
+  if (
+    typeof archivio.chiusaIl !== 'string' ||
+    Number.isNaN(Date.parse(archivio.chiusaIl)) ||
+    !Array.isArray(archivio.tavoli) ||
+    typeof archivio.richieste !== 'object' ||
+    archivio.richieste === null ||
+    Array.isArray(archivio.richieste)
+  ) {
+    return false
+  }
+
+  const tavoliValidi = archivio.tavoli.every((valore: unknown) => {
+    if (typeof valore !== 'object' || valore === null) return false
+    const tavolo = valore as Record<string, unknown>
+
+    return (
+      typeof tavolo.id === 'string' &&
+      typeof tavolo.numero === 'number' &&
+      Number.isInteger(tavolo.numero) &&
+      ['Console', 'Privé', 'Pista'].includes(String(tavolo.zona))
+    )
+  })
+
+  const richiesteValide = Object.values(archivio.richieste).every(
+    (elenco: unknown) =>
+      Array.isArray(elenco) &&
+      elenco.every((valore: unknown) => {
+        if (typeof valore !== 'object' || valore === null) return false
+        const richiesta = valore as Record<string, unknown>
+
+        return (
+          typeof richiesta.id === 'string' &&
+          typeof richiesta.gruppo === 'string' &&
+          typeof richiesta.responsabile === 'string' &&
+          typeof richiesta.pr === 'string' &&
+          typeof richiesta.accettata === 'boolean' &&
+          typeof richiesta.persone === 'number' &&
+          Number.isInteger(richiesta.persone) &&
+          richiesta.persone > 0 &&
+          typeof richiesta.totale === 'number' &&
+          Number.isFinite(richiesta.totale) &&
+          richiesta.totale > 0
+        )
+      }),
+  )
+
+  return tavoliValidi && richiesteValide
+}
+
 function serataValida(valore: unknown): valore is Serata {
   if (typeof valore !== 'object' || valore === null) return false
 
@@ -73,11 +130,16 @@ function serataValida(valore: unknown): valore is Serata {
     typeof serata.nome === 'string' &&
     typeof serata.data === 'string' &&
     dataValida(serata.data) &&
-    [14, 16, 18].includes(Number(serata.etaMinima)) &&
+    typeof serata.etaMinima === 'number' &&
+    [14, 16, 18].includes(serata.etaMinima) &&
     (
       serata.tipo === 'Venerdì' ||
       serata.tipo === 'Sabato' ||
       serata.tipo === 'Speciale'
+    ) &&
+    (
+      serata.archivio === undefined ||
+      archivioValido(serata.archivio)
     )
   )
 }
@@ -117,11 +179,8 @@ function formattaMese(mese: string) {
 
 function App() {
   const [serate, setSerate] = useState<Serata[]>(caricaSerate)
-
-  const [serataSelezionata, setSerataSelezionata] =
-    useState<Serata | null>(null)
-
-  const [amministrazione, setAmministrazione] = useState(false)
+  const [serataId, setSerataId] = useState<string | null>(null)
+  const [vista, setVista] = useState<Vista>('serate')
 
   const [meseVisibile, setMeseVisibile] = useState(
     dataLocaleOggi().slice(0, 7),
@@ -131,87 +190,24 @@ function App() {
   const [data, setData] = useState('')
   const [tipo, setTipo] = useState<TipoSerata>('Speciale')
   const [etaMinima, setEtaMinima] = useState(18)
-
   const [errore, setErrore] = useState('')
   const [messaggio, setMessaggio] = useState('')
 
+  const serataSelezionata = serate.find(
+    (serata) => serata.id === serataId,
+  )
+
   const serateDelMese = serate
-    .filter((serata) => serata.data.startsWith(meseVisibile))
+    .filter(
+      (serata) =>
+        serata.data.startsWith(meseVisibile) &&
+        (vista === 'archivio'
+          ? serata.archivio !== undefined
+          : serata.archivio === undefined),
+    )
     .sort((prima, seconda) => prima.data.localeCompare(seconda.data))
 
-  function cambiaVista(admin: boolean) {
-    setAmministrazione(admin)
-    setSerataSelezionata(null)
-    setErrore('')
-    setMessaggio('')
-  }
-
-  function cambiaTipo(nuovoTipo: TipoSerata) {
-    setTipo(nuovoTipo)
-
-    if (nuovoTipo === 'Venerdì') {
-      setEtaMinima(18)
-    } else if (nuovoTipo === 'Sabato') {
-      setEtaMinima(16)
-    }
-  }
-
-  function creaSerata(evento: FormEvent<HTMLFormElement>) {
-    evento.preventDefault()
-    setErrore('')
-    setMessaggio('')
-
-    if (!amministrazione) return
-
-    if (!nome.trim() || !dataValida(data)) {
-      setErrore('Inserisci un nome e una data valida.')
-      return
-    }
-
-    const giornoSettimana =
-      new Date(`${data}T12:00:00`).getDay()
-
-    if (tipo === 'Venerdì' && giornoSettimana !== 5) {
-      setErrore(
-        'La data scelta non è un venerdì. ' +
-        'Correggi la data oppure scegli Evento speciale.',
-      )
-      return
-    }
-
-    if (tipo === 'Sabato' && giornoSettimana !== 6) {
-      setErrore(
-        'La data scelta non è un sabato. ' +
-        'Correggi la data oppure scegli Evento speciale.',
-      )
-      return
-    }
-
-    if (serate.some((serata) => serata.data === data)) {
-      setErrore(
-        'Esiste già una serata in questa data. ' +
-        'In questa prima versione gestiamo un evento per data.',
-      )
-      return
-    }
-
-    const etaEffettiva =
-      tipo === 'Venerdì'
-        ? 18
-        : tipo === 'Sabato'
-          ? 16
-          : etaMinima
-
-    const nuovaSerata: Serata = {
-      id: data,
-      nome: nome.trim(),
-      data,
-      etaMinima: etaEffettiva,
-      tipo,
-    }
-
-    const aggiornate = [...serate, nuovaSerata]
-
+  function salvaSerate(aggiornate: Serata[]) {
     try {
       localStorage.setItem(
         chiaveSerate,
@@ -219,26 +215,123 @@ function App() {
       )
     } catch {
       setErrore(
-        'Il browser non riesce a salvare la nuova serata. ' +
+        'Il browser non riesce a salvare i dati. ' +
         'Nessuna modifica è stata applicata.',
+      )
+      return false
+    }
+
+    setSerate(aggiornate)
+    setErrore('')
+    return true
+  }
+
+  function cambiaVista(nuovaVista: Vista) {
+    setVista(nuovaVista)
+    setSerataId(null)
+    setErrore('')
+    setMessaggio('')
+  }
+
+  function cambiaTipo(nuovoTipo: TipoSerata) {
+    setTipo(nuovoTipo)
+
+    if (nuovoTipo === 'Venerdì') setEtaMinima(18)
+    if (nuovoTipo === 'Sabato') setEtaMinima(16)
+  }
+
+  function creaSerata(evento: FormEvent<HTMLFormElement>) {
+    evento.preventDefault()
+    setErrore('')
+    setMessaggio('')
+
+    if (vista !== 'admin') return
+
+    if (!nome.trim() || !dataValida(data)) {
+      setErrore('Inserisci un nome e una data valida.')
+      return
+    }
+
+    const giorno = new Date(`${data}T12:00:00`).getDay()
+
+    if (
+      (tipo === 'Venerdì' && giorno !== 5) ||
+      (tipo === 'Sabato' && giorno !== 6)
+    ) {
+      setErrore(
+        'La data non corrisponde alla tipologia scelta. ' +
+        'Correggila oppure scegli Evento speciale.',
       )
       return
     }
 
-    setSerate(aggiornate)
-    setMeseVisibile(data.slice(0, 7))
-    setMessaggio(`Serata "${nuovaSerata.nome}" creata.`)
-    setNome('')
-    setData('')
+    if (serate.some((serata) => serata.data === data)) {
+      setErrore(
+        'Esiste già una serata in questa data, attiva o archiviata. ' +
+        'In questa prima versione gestiamo un evento per data.',
+      )
+      return
+    }
+
+    const nuova: Serata = {
+      id: data,
+      nome: nome.trim(),
+      data,
+      tipo,
+      etaMinima:
+        tipo === 'Venerdì'
+          ? 18
+          : tipo === 'Sabato'
+            ? 16
+            : etaMinima,
+    }
+
+    if (salvaSerate([...serate, nuova])) {
+      setMeseVisibile(data.slice(0, 7))
+      setMessaggio(`Serata "${nuova.nome}" creata.`)
+      setNome('')
+      setData('')
+    }
+  }
+
+  function archiviaSerata(
+    id: string,
+    richieste: DatiArchivio['richieste'],
+    tavoli: DatiArchivio['tavoli'],
+  ) {
+    const serata = serate.find((elemento) => elemento.id === id)
+
+    if (!serata || serata.archivio) return
+
+    const conferma = window.confirm(
+      `Chiudere la serata "${serata.nome}" del ${formattaData(serata.data)}? ` +
+      'Le richieste saranno conservate nell’archivio e non saranno più modificabili.',
+    )
+
+    if (!conferma) return
+
+    const archivio: DatiArchivio = {
+      chiusaIl: new Date().toISOString(),
+      tavoli,
+      richieste,
+    }
+
+    const aggiornate = serate.map((elemento) =>
+      elemento.id === id
+        ? { ...elemento, archivio }
+        : elemento,
+    )
+
+    if (salvaSerate(aggiornate)) {
+      setVista('archivio')
+      setMessaggio('Serata chiusa e archiviata.')
+    }
   }
 
   return (
     <div className="app">
       <header className="barra-superiore">
-        <a className="marchio" href="/">
-          GESTIONALE TAVOLI
-        </a>
-
+        <a className="marchio" href="/">GESTIONALE TAVOLI</a>
         <span className="badge-demo">Modalità demo</span>
       </header>
 
@@ -247,12 +340,12 @@ function App() {
           <button
             type="button"
             className={
-              !amministrazione
+              vista === 'serate'
                 ? 'pulsante-principale'
                 : 'pulsante-secondario'
             }
-            aria-pressed={!amministrazione}
-            onClick={() => cambiaVista(false)}
+            aria-pressed={vista === 'serate'}
+            onClick={() => cambiaVista('serate')}
           >
             Serate
           </button>
@@ -260,16 +353,37 @@ function App() {
           <button
             type="button"
             className={
-              amministrazione
+              vista === 'admin'
                 ? 'pulsante-principale'
                 : 'pulsante-secondario'
             }
-            aria-pressed={amministrazione}
-            onClick={() => cambiaVista(true)}
+            aria-pressed={vista === 'admin'}
+            onClick={() => cambiaVista('admin')}
           >
             Amministrazione
           </button>
+
+          <button
+            type="button"
+            className={
+              vista === 'archivio'
+                ? 'pulsante-principale'
+                : 'pulsante-secondario'
+            }
+            aria-pressed={vista === 'archivio'}
+            onClick={() => cambiaVista('archivio')}
+          >
+            Archivio
+          </button>
         </nav>
+
+        {errore && (
+          <p className="errore-richiesta" role="alert">{errore}</p>
+        )}
+
+        {messaggio && (
+          <p className="messaggio-serata" role="status">{messaggio}</p>
+        )}
 
         {serataSelezionata ? (
           <>
@@ -277,9 +391,15 @@ function App() {
               <button
                 type="button"
                 className="pulsante-indietro"
-                onClick={() => setSerataSelezionata(null)}
+                onClick={() => {
+                  setSerataId(null)
+                  setErrore('')
+                  setMessaggio('')
+                }}
               >
-                ← Torna alle serate
+                ← {serataSelezionata.archivio
+                  ? 'Torna all’archivio'
+                  : 'Torna alle serate'}
               </button>
             </div>
 
@@ -290,33 +410,55 @@ function App() {
             <h1>{serataSelezionata.nome}</h1>
 
             <p className="introduzione">
-              Serata selezionata · Accesso +{serataSelezionata.etaMinima}
+              Accesso +{serataSelezionata.etaMinima}
             </p>
 
-            <TavoliSerata
-              key={serataSelezionata.id}
-              serataId={serataSelezionata.id}
-            />
+            {serataSelezionata.archivio ? (
+              <ArchivioSerata
+                serataId={serataSelezionata.id}
+                archivio={serataSelezionata.archivio}
+              />
+            ) : (
+              <TavoliSerata
+                key={serataSelezionata.id}
+                serataId={serataSelezionata.id}
+                onChiudi={(richieste, tavoli) =>
+                  archiviaSerata(
+                    serataSelezionata.id,
+                    richieste,
+                    tavoli,
+                  )
+                }
+              />
+            )}
           </>
         ) : (
           <>
             <p className="etichetta">
-              {amministrazione ? 'Gestione eventi' : 'Calendario'}
+              {vista === 'admin'
+                ? 'Gestione eventi'
+                : vista === 'archivio'
+                  ? 'Storico'
+                  : 'Calendario'}
             </p>
 
             <h1>
-              {amministrazione
+              {vista === 'admin'
                 ? 'Organizza le serate.'
-                : 'Scegli la tua serata.'}
+                : vista === 'archivio'
+                  ? 'Archivio serate.'
+                  : 'Scegli la tua serata.'}
             </h1>
 
             <p className="introduzione">
-              {amministrazione
+              {vista === 'admin'
                 ? 'Crea gli eventi e definisci il limite di età.'
-                : 'Seleziona un evento per accedere alla gestione dei tavoli.'}
+                : vista === 'archivio'
+                  ? 'Consulta le serate chiuse e scarica i riepiloghi.'
+                  : 'Seleziona un evento per gestire i tavoli.'}
             </p>
 
-            {amministrazione && (
+            {vista === 'admin' && (
               <section className="pannello">
                 <h2>Nuova serata</h2>
 
@@ -327,8 +469,8 @@ function App() {
                       type="text"
                       value={nome}
                       onChange={(evento) => setNome(evento.target.value)}
-                      placeholder="Es. Saturday Night"
                       maxLength={100}
+                      placeholder="Es. Saturday Night"
                       required
                     />
                   </label>
@@ -373,10 +515,7 @@ function App() {
                   </label>
 
                   <div className="azioni-richiesta">
-                    <button
-                      type="submit"
-                      className="pulsante-principale"
-                    >
+                    <button type="submit" className="pulsante-principale">
                       Crea serata
                     </button>
                   </div>
@@ -384,21 +523,8 @@ function App() {
 
                 <p className="nota-demo">
                   Venerdì: +18. Sabato: +16.
-                  Per eventi +14, anche nel fine settimana,
-                  scegli Evento speciale.
+                  Per eventi +14 scegli Evento speciale.
                 </p>
-
-                {errore && (
-                  <p className="errore-richiesta" role="alert">
-                    {errore}
-                  </p>
-                )}
-
-                {messaggio && (
-                  <p className="messaggio-serata" role="status">
-                    {messaggio}
-                  </p>
-                )}
               </section>
             )}
 
@@ -410,20 +536,23 @@ function App() {
                 onChange={(evento) => {
                   const valore = evento.target.value
 
-                  if (/^\d{4}-\d{2}$/.test(valore)) {
+                  if (
+                    /^\d{4}-\d{2}$/.test(valore) &&
+                    dataValida(`${valore}-01`)
+                  ) {
                     setMeseVisibile(valore)
                   }
                 }}
               />
             </label>
 
-            <p className="etichetta">
-              {formattaMese(meseVisibile)}
-            </p>
+            <p className="etichetta">{formattaMese(meseVisibile)}</p>
 
             {serateDelMese.length === 0 ? (
               <p className="introduzione">
-                Nessuna serata presente in questo mese.
+                {vista === 'archivio'
+                  ? 'Nessuna serata archiviata in questo mese.'
+                  : 'Nessuna serata attiva in questo mese.'}
               </p>
             ) : (
               <div className="elenco-serate">
@@ -432,10 +561,16 @@ function App() {
                     type="button"
                     key={serata.id}
                     className="scheda-serata"
-                    onClick={() => setSerataSelezionata(serata)}
+                    onClick={() => {
+                      setSerataId(serata.id)
+                      setErrore('')
+                      setMessaggio('')
+                    }}
                   >
                     <span className="scheda-intestazione">
-                      <span className="tipo-serata">{serata.tipo}</span>
+                      <span className="tipo-serata">
+                        {serata.archivio ? 'Archiviata' : serata.tipo}
+                      </span>
                       <span className="limite-eta">
                         +{serata.etaMinima}
                       </span>
@@ -448,7 +583,9 @@ function App() {
                     </span>
 
                     <span className="apri-serata">
-                      Apri serata →
+                      {serata.archivio
+                        ? 'Consulta archivio →'
+                        : 'Apri serata →'}
                     </span>
                   </button>
                 ))}
@@ -456,9 +593,9 @@ function App() {
             )}
 
             <p className="nota-demo">
-              Eventi e richieste sono salvati in questo browser.
-              I pulsanti di cambio vista sono dimostrativi:
-              gli account e i filtri personali verranno aggiunti dopo.
+              Dati salvati in questo browser.
+              Le viste sono dimostrative; gli accessi personali
+              saranno aggiunti successivamente.
             </p>
           </>
         )}
